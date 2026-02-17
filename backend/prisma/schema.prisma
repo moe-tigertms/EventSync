@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  firstName String?
+  lastName  String?
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownedEvents Event[]      @relation("EventOwner")
+  invitations Invitation[]
+}
+
+enum InvitationStatus {
+  upcoming
+  attending
+  maybe
+  declined
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  location    String?
+  startTime   DateTime
+  endTime     DateTime?
+  ownerId     String
+  owner       User      @relation("EventOwner", fields: [ownerId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  invitations Invitation[]
+}
+
+model Invitation {
+  id           String           @id @default(cuid())
+  eventId      String
+  event        Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId       String?
+  user         User?            @relation(fields: [userId], references: [id])
+  inviteeEmail String
+  status       InvitationStatus @default(upcoming)
+  createdAt    DateTime         @default(now())
+
+  @@unique([eventId, inviteeEmail])
+}
