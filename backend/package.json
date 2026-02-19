@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc --build",
-    "start:build": "node dist/index.js"
+    "typecheck": "tsc --noEmit",
+    "build": "tsup src/index.ts --format esm --out-dir dist --clean",
+    "start:prod": "node dist/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +21,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^25.2.3",
     "prisma": "^7.4.0",
+    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
