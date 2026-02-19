@@ -11,6 +11,8 @@
     "moduleResolution": "bundler",
     "target": "ES2023",
     "strict": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
     // For nodejs:
     // "lib": ["esnext"],
     // "types": ["node"],
