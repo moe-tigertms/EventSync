@@ -33,6 +33,19 @@ export function isPast(date: string | Date) {
   return new Date(date) < new Date();
 }
 
+export function isOngoing(startTime: string | Date, endTime?: string | Date | null): boolean {
+  const now = new Date();
+  return new Date(startTime) <= now && !!endTime && new Date(endTime) > now;
+}
+
+export function isFullyPast(startTime: string | Date, endTime?: string | Date | null): boolean {
+  const now = new Date();
+  if (endTime) return new Date(endTime) < now;
+  const start = new Date(startTime);
+  const endOfDay = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1);
+  return endOfDay <= now;
+}
+
 export function getInitials(
   firstName?: string | null,
   lastName?: string | null

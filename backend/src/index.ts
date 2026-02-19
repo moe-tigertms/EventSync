@@ -27,7 +27,7 @@ app.use(
   cors({
     origin: process.env.FRONTEND_URL ?? "http://localhost:5173",
     credentials: true,
-  })
+  }),
 );
 app.use(express.json());
 
@@ -90,7 +90,7 @@ async function syncUser(req: Request, res: Response, next: NextFunction) {
       const clerkUser = await clerkClient.users.getUser(clerkId);
       const email =
         clerkUser.emailAddresses.find(
-          (e) => e.id === clerkUser.primaryEmailAddressId
+          (e) => e.id === clerkUser.primaryEmailAddressId,
         )?.emailAddress ??
         clerkUser.emailAddresses[0]?.emailAddress ??
         "";
@@ -238,7 +238,7 @@ app.get("/api/events/:id", ...auth, async (req: Request, res: Response) => {
     res.json({
       ...event,
       isOwner,
-      myStatus: isOwner ? "attending" : inv?.status ?? "upcoming",
+      myStatus: isOwner ? "attending" : (inv?.status ?? "upcoming"),
     });
   } catch (err) {
     console.error(err);
@@ -356,7 +356,7 @@ app.post(
       console.error(err);
       res.status(500).json({ error: "Failed to duplicate event" });
     }
-  }
+  },
 );
 
 // ---------------------------------------------------------------------------
@@ -390,7 +390,10 @@ app.get(
       }
 
       const toIcsDate = (d: Date) =>
-        d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+        d
+          .toISOString()
+          .replace(/[-:]/g, "")
+          .replace(/\.\d{3}/, "");
 
       const ownerName =
         `${event.owner.firstName ?? ""} ${event.owner.lastName ?? ""}`.trim();
@@ -426,14 +429,14 @@ app.get(
       res.setHeader("Content-Type", "text/calendar; charset=utf-8");
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${filename}"`
+        `attachment; filename="${filename}"`,
       );
       res.send(icsContent);
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Failed to export event" });
     }
-  }
+  },
 );
 
 // ---------------------------------------------------------------------------
@@ -498,7 +501,7 @@ app.post(
       console.error(err);
       res.status(500).json({ error: "Failed to create invitation" });
     }
-  }
+  },
 );
 
 app.patch(
@@ -545,7 +548,7 @@ app.patch(
       console.error(err);
       res.status(500).json({ error: "Failed to update status" });
     }
-  }
+  },
 );
 
 app.delete(
@@ -569,7 +572,7 @@ app.delete(
       console.error(err);
       res.status(500).json({ error: "Failed to remove invitation" });
     }
-  }
+  },
 );
 
 // ---------------------------------------------------------------------------
@@ -651,8 +654,20 @@ app.get("/api/users/search", ...auth, async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // AI Assistant
 // ---------------------------------------------------------------------------
-function buildAiSystemPrompt(): string {
-  const today = new Date().toISOString().split("T")[0];
+function buildAiSystemPrompt(timezone?: string): string {
+  const tz = timezone || "UTC";
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const localNow = formatter.format(now);
+
   return `You are an AI assistant for the EventSync event scheduler app. You help users manage their events.
 
 CAPABILITIES:
@@ -667,10 +682,16 @@ RULES:
 - Always respond with a single JSON object.
 - For actions: include "action" plus the required/optional fields.
 - For plain replies: use { "action": "reply", "message": "your text" }.
-- Infer dates relative to today. Today is ${today}.
+- The user's timezone is ${tz}. Current local date/time for the user: ${localNow}.
+- When generating startTime/endTime, always produce a FULL ISO 8601 string with the correct UTC offset for the user's timezone. For example, if the timezone is Asia/Beirut (UTC+2), "tomorrow at 4pm" should become something like "2025-02-20T16:00:00+02:00". Never use "Z" unless the user is in UTC.
+- NEVER create an event with a startTime in the past. If the user asks for a time that has already passed today, assume they mean the next occurrence (e.g. tomorrow).
+- The event list provided only contains upcoming/ongoing events. Do not reference or modify events not in the list.
+- Each event has a role: "organizer" or "invitee". Only use update_event, delete_event, or invite on events where role=organizer. For invitee events, you may only use set_status. If the user asks to edit/delete an event they don't own, politely explain they can only modify events they organized.
+- When the user asks to move/reschedule an event, if the event has an endTime, shift the endTime by the same amount so the event duration stays the same. Always include both startTime and endTime in the update.
 - If the user asks to create an event AND invite someone, use create_event with the inviteEmails field.
 - If the user asks to invite someone to an existing event, use the invite action.
-- If the user is ambiguous, pick the most likely interpretation and confirm in your reply message.
+- When the user wants to modify (update/delete/invite) an event by name, first filter to only the events where role=organizer. If exactly one organizer event matches, proceed with the action. If multiple organizer events match the same name, use the "reply" action to list only those organizer events with their dates/times and ask the user to clarify. If no organizer events match but invitee events do, politely explain they can only modify events they organized.
+- For other ambiguous requests (not related to duplicate names), pick the most likely interpretation and confirm in your reply message.
 - Always include a friendly "message" field describing what you did.`;
 }
 
@@ -708,13 +729,22 @@ type AiAction =
 app.post("/api/ai", ...auth, async (req: Request, res: Response) => {
   try {
     const user = getLocalUser(req);
-    const { message, events: eventsCtx } = req.body as {
+    const {
+      message,
+      events: eventsCtx,
+      timezone,
+      history,
+    } = req.body as {
       message: string;
+      timezone?: string;
+      history?: Array<{ role: "user" | "assistant"; content: string }>;
       events?: Array<{
         id: string;
         title: string;
         startTime: string;
+        endTime?: string | null;
         location?: string;
+        isOwner?: boolean;
       }>;
     };
 
@@ -730,36 +760,55 @@ app.post("/api/ai", ...auth, async (req: Request, res: Response) => {
     }
 
     const ai = new GoogleGenAI({ apiKey });
-    const systemPrompt = buildAiSystemPrompt();
+    const systemPrompt = buildAiSystemPrompt(timezone);
 
     const eventsList = Array.isArray(eventsCtx) ? eventsCtx : [];
     const context = eventsList.length
       ? `User's current events:\n${eventsList
           .map(
             (e) =>
-              `- [${e.id}] "${e.title}" at ${e.startTime}${
-                e.location ? ` (${e.location})` : ""
-              }`
+              `- [${e.id}] "${e.title}" start=${e.startTime}${
+                e.endTime ? ` end=${e.endTime}` : ""
+              }${e.location ? ` location=${e.location}` : ""} role=${
+                e.isOwner ? "organizer" : "invitee"
+              }`,
           )
           .join("\n")}`
       : "User has no events yet.";
 
-    const prompt = `${systemPrompt}\n\n${context}\n\nUser says: "${message}"\n\nRespond with JSON only:`;
+    const chatHistory = Array.isArray(history) && history.length > 0
+      ? `\nConversation so far:\n${history
+          .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+          .join("\n")}\n`
+      : "";
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: prompt,
-    });
+    const prompt = `${systemPrompt}\n\n${context}${chatHistory}\nUser says: "${message}"\n\nRespond with JSON only:`;
 
-    const text = response.text?.trim() ?? "";
-    let parsed: AiAction;
-    try {
-      const cleaned = text.replace(/^```json?\s*|\s*```$/g, "").trim();
-      parsed = JSON.parse(cleaned) as AiAction;
-    } catch {
+    const MAX_RETRIES = 3;
+    let parsed: AiAction | undefined;
+    let lastText = "";
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents: prompt,
+        });
+        lastText = response.text?.trim() ?? "";
+        const cleaned = lastText.replace(/^```json?\s*|\s*```$/g, "").trim();
+        parsed = JSON.parse(cleaned) as AiAction;
+        break;
+      } catch (err) {
+        if (attempt === MAX_RETRIES - 1) {
+          console.error(`AI attempt ${attempt + 1}/${MAX_RETRIES} failed:`, err);
+        }
+      }
+    }
+
+    if (!parsed) {
       res.json({
         reply:
-          text ||
+          lastText ||
           "Sorry, I had trouble understanding that. Try something like 'Create a meeting tomorrow at 2pm'.",
         actions: [],
       });
@@ -788,11 +837,7 @@ app.post("/api/ai", ...auth, async (req: Request, res: Response) => {
       });
     }
 
-    if (
-      parsed.action === "create_event" &&
-      parsed.title &&
-      parsed.startTime
-    ) {
+    if (parsed.action === "create_event" && parsed.title && parsed.startTime) {
       const event = await prisma.event.create({
         data: {
           title: parsed.title,

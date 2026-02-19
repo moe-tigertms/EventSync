@@ -4,7 +4,7 @@ import { useAuth } from "@clerk/clerk-react";
 import { api } from "../lib/api";
 import type { EventData } from "../lib/api";
 import { useToast } from "./Toast";
-import { cn } from "../lib/utils";
+import { cn, isFullyPast } from "../lib/utils";
 
 interface Message {
   role: "user" | "assistant";
@@ -56,14 +56,20 @@ export function AiAssistant({ events, onActionPerformed }: AiAssistantProps) {
       const token = await getToken();
       if (!token) return;
 
-      const eventsCtx = events.map((e) => ({
-        id: e.id,
-        title: e.title,
-        startTime: e.startTime,
-        location: e.location,
-      }));
+      const eventsCtx = events
+        .filter((e) => !isFullyPast(e.startTime, e.endTime))
+        .map((e) => ({
+          id: e.id,
+          title: e.title,
+          startTime: e.startTime,
+          endTime: e.endTime,
+          location: e.location,
+          isOwner: e.isOwner,
+        }));
 
-      const result = await api.askAi(msg, eventsCtx, token);
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const chatHistory = messages.slice(1);
+      const result = await api.askAi(msg, eventsCtx, token, timezone, chatHistory);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: result.reply },

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { MapPin, Clock, Users, Crown } from "lucide-react";
-import { cn, formatTime, isUpcoming, relativeTime } from "../lib/utils";
+import { cn, formatTime, isUpcoming, isOngoing, isFullyPast, relativeTime } from "../lib/utils";
 import type { EventData } from "../lib/api";
 import { StatusBadge } from "./StatusBadge";
 import { Avatar } from "./Avatar";
@@ -45,6 +45,8 @@ function AttendeeStack({
 
 export function EventCard({ event }: EventCardProps) {
   const upcoming = isUpcoming(event.startTime);
+  const ongoing = isOngoing(event.startTime, event.endTime);
+  const past = isFullyPast(event.startTime, event.endTime);
   const attendeeCount = event.invitations.filter(
     (i) => i.status === "attending"
   ).length;
@@ -54,10 +56,19 @@ export function EventCard({ event }: EventCardProps) {
       to={`/events/${event.id}`}
       className={cn(
         "group block rounded-2xl p-5 transition-smooth glass hover:shadow-xl hover:shadow-primary-500/10 hover:-translate-y-0.5 relative",
-        !upcoming && "opacity-60"
+        past && "opacity-60"
       )}
     >
-      {!upcoming && (
+      {ongoing && (
+        <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold uppercase tracking-wide">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          Ongoing
+        </div>
+      )}
+      {past && (
         <div className="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-gray-200/80 text-gray-500 text-[10px] font-semibold uppercase tracking-wide">
           Past
         </div>
@@ -68,7 +79,9 @@ export function EventCard({ event }: EventCardProps) {
           <div
             className={cn(
               "w-12 h-12 rounded-xl text-white flex flex-col items-center justify-center text-xs font-bold shadow-md",
-              upcoming
+              ongoing
+                ? "bg-gradient-to-br from-emerald-500 to-teal-500"
+                : upcoming
                 ? "bg-gradient-to-br from-primary-500 to-purple-500"
                 : "bg-gradient-to-br from-gray-400 to-gray-500"
             )}
@@ -95,10 +108,14 @@ export function EventCard({ event }: EventCardProps) {
               <span className="text-gray-300">|</span>
               <span
                 className={cn(
-                  upcoming ? "text-primary-500" : "text-gray-400"
+                  ongoing
+                    ? "text-emerald-500"
+                    : upcoming
+                    ? "text-primary-500"
+                    : "text-gray-400"
                 )}
               >
-                {relativeTime(event.startTime)}
+                {ongoing ? "Happening now" : relativeTime(event.startTime)}
               </span>
             </div>
           </div>
@@ -131,7 +148,7 @@ export function EventCard({ event }: EventCardProps) {
           )}
           <span className="flex items-center gap-1">
             <Users className="w-3 h-3 text-primary-400" />
-            {attendeeCount + (event.isOwner ? 1 : 0)} going
+            {attendeeCount + 1} going
           </span>
         </div>
 

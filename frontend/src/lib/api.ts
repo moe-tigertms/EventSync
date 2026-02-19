@@ -206,13 +206,16 @@ export const api = {
       id: string;
       title: string;
       startTime: string;
+      endTime?: string | null;
       location?: string | null;
     }>,
-    token: string
+    token: string,
+    timezone?: string,
+    history?: Array<{ role: "user" | "assistant"; content: string }>
   ) {
     return request<AiResponse>(
       "/api/ai",
-      { method: "POST", body: JSON.stringify({ message, events }) },
+      { method: "POST", body: JSON.stringify({ message, events, timezone, history }) },
       token
     );
   },

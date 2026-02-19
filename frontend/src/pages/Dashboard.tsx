@@ -6,6 +6,8 @@ import {
   Inbox,
   ArrowUpDown,
   Sun,
+  History,
+  Bell,
 } from "lucide-react";
 import { api } from "../lib/api";
 import type { EventData } from "../lib/api";
@@ -17,9 +19,9 @@ import { StatsBar } from "../components/StatsBar";
 import { EventGridSkeleton } from "../components/EventCardSkeleton";
 import { useToast } from "../components/Toast";
 import { useDocumentTitle } from "../lib/useDocumentTitle";
-import { cn, isToday, isUpcoming } from "../lib/utils";
+import { cn, isToday, isUpcoming, isFullyPast } from "../lib/utils";
 
-type Tab = "mine" | "invited";
+type Tab = "mine" | "invited" | "past";
 type SortKey = "date-asc" | "date-desc" | "title" | "created";
 
 const sortLabels: Record<SortKey, string> = {
@@ -138,17 +140,65 @@ export function Dashboard() {
     fetchEvents();
   };
 
-  const myEvents = events.filter((e) => e.isOwner);
-  const invitedEvents = events.filter((e) => !e.isOwner);
-  const tabEvents = activeTab === "mine" ? myEvents : invitedEvents;
-  const displayEvents = sortEvents(tabEvents, sortKey);
+  const pastEvents = events.filter((e) => isFullyPast(e.startTime, e.endTime));
+  const active = events.filter((e) => !isFullyPast(e.startTime, e.endTime));
+  const myEvents = active.filter(
+    (e) => e.isOwner || e.myStatus === "attending" || e.myStatus === "maybe"
+  );
+  const invitedEvents = active.filter(
+    (e) => !e.isOwner && e.myStatus !== "attending" && e.myStatus !== "maybe"
+  );
+  const tabEvents =
+    activeTab === "mine"
+      ? myEvents
+      : activeTab === "invited"
+      ? invitedEvents
+      : pastEvents;
+  const displayEvents = sortEvents(
+    tabEvents,
+    activeTab === "past" && sortKey === "date-asc" ? "date-desc" : sortKey
+  );
 
   const todayEvents = events.filter(
     (e) => isToday(e.startTime) && isUpcoming(e.startTime)
   );
 
+  const pendingInvites = events.filter(
+    (e) => !e.isOwner && e.myStatus === "upcoming" && isUpcoming(e.startTime)
+  );
+
   return (
     <div className="space-y-6">
+      {/* Pending invitations notification */}
+      {!loading && pendingInvites.length > 0 && (
+        <div className="flex items-center gap-3 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 px-4 py-3 shadow-sm">
+          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-amber-100 flex-shrink-0">
+            <Bell className="w-5 h-5 text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800">
+              {pendingInvites.length === 1
+                ? "You have a pending invitation"
+                : `You have ${pendingInvites.length} pending invitations`}
+            </p>
+            <p className="text-xs text-amber-600 truncate">
+              {pendingInvites
+                .slice(0, 3)
+                .map((e) => e.title)
+                .join(", ")}
+              {pendingInvites.length > 3 &&
+                ` and ${pendingInvites.length - 3} more`}
+            </p>
+          </div>
+          <button
+            onClick={() => setActiveTab("invited")}
+            className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors flex-shrink-0"
+          >
+            View
+          </button>
+        </div>
+      )}
+
       {/* Hero section */}
       <div className="flex items-end justify-between">
         <div>
@@ -230,6 +280,21 @@ export function Dashboard() {
                 {invitedEvents.length}
               </span>
             </button>
+            <button
+              onClick={() => setActiveTab("past")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-smooth",
+                activeTab === "past"
+                  ? "bg-white text-primary-600 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              <History className="w-4 h-4" />
+              Past
+              <span className="ml-1 px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs font-semibold">
+                {pastEvents.length}
+              </span>
+            </button>
           </div>
 
           {/* Sort dropdown */}
@@ -286,14 +351,18 @@ export function Dashboard() {
               ? "No events found"
               : activeTab === "mine"
               ? "No events yet"
-              : "No invitations yet"}
+              : activeTab === "invited"
+              ? "No invitations yet"
+              : "No past events"}
           </h3>
           <p className="text-gray-500 text-sm mb-4">
             {isSearching
               ? "Try different search terms or adjust your filters"
               : activeTab === "mine"
               ? "Create your first event to get started!"
-              : "You'll see events here when someone invites you"}
+              : activeTab === "invited"
+              ? "You'll see events here when someone invites you"
+              : "Your completed events will appear here"}
           </p>
           {!isSearching && activeTab === "mine" && (
             <button
