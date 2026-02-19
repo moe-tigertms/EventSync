@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import { Plus, Calendar, Inbox, Loader2 } from "lucide-react";
 import { api } from "../lib/api";
@@ -7,17 +7,32 @@ import { EventCard } from "../components/EventCard";
 import { EventForm } from "../components/EventForm";
 import { SearchBar } from "../components/SearchBar";
 import { AiAssistant } from "../components/AiAssistant";
+import { StatsBar } from "../components/StatsBar";
+import { useToast } from "../components/Toast";
 import { cn } from "../lib/utils";
 
 type Tab = "mine" | "invited";
 
 export function Dashboard() {
   const { getToken } = useAuth();
+  const { toast } = useToast();
   const [events, setEvents] = useState<EventData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("mine");
   const [isSearching, setIsSearching] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -27,10 +42,11 @@ export function Dashboard() {
       setEvents(data);
     } catch (err) {
       console.error("Failed to fetch events:", err);
+      toast("Failed to load events", "error");
     } finally {
       setLoading(false);
     }
-  }, [getToken]);
+  }, [getToken, toast]);
 
   useEffect(() => {
     fetchEvents();
@@ -57,6 +73,7 @@ export function Dashboard() {
       setEvents(data);
     } catch (err) {
       console.error("Search failed:", err);
+      toast("Search failed", "error");
     } finally {
       setLoading(false);
     }
@@ -72,6 +89,7 @@ export function Dashboard() {
     const token = await getToken();
     if (!token) return;
     await api.createEvent(data, token);
+    toast("Event created successfully", "success");
     fetchEvents();
   };
 
@@ -102,8 +120,11 @@ export function Dashboard() {
         </button>
       </div>
 
+      {/* Stats */}
+      {!isSearching && !loading && <StatsBar events={events} />}
+
       {/* Search */}
-      <SearchBar onSearch={handleSearch} />
+      <SearchBar onSearch={handleSearch} searchInputRef={searchRef} />
 
       {/* Tabs */}
       {!isSearching && (
@@ -183,12 +204,10 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Create event modal */}
       {showForm && (
         <EventForm onSubmit={handleCreate} onClose={() => setShowForm(false)} />
       )}
 
-      {/* AI Assistant */}
       <AiAssistant events={events} onActionPerformed={fetchEvents} />
     </div>
   );

@@ -29,6 +29,10 @@ export function isUpcoming(date: string | Date) {
   return new Date(date) > new Date();
 }
 
+export function isPast(date: string | Date) {
+  return new Date(date) < new Date();
+}
+
 export function getInitials(
   firstName?: string | null,
   lastName?: string | null
@@ -36,4 +40,52 @@ export function getInitials(
   const f = firstName?.charAt(0) ?? "";
   const l = lastName?.charAt(0) ?? "";
   return (f + l).toUpperCase() || "?";
+}
+
+export function relativeTime(date: string | Date): string {
+  const now = new Date();
+  const target = new Date(date);
+  const diffMs = target.getTime() - now.getTime();
+  const absDiffMs = Math.abs(diffMs);
+  const isFuture = diffMs > 0;
+
+  const minutes = Math.floor(absDiffMs / (1000 * 60));
+  const hours = Math.floor(absDiffMs / (1000 * 60 * 60));
+  const days = Math.floor(absDiffMs / (1000 * 60 * 60 * 24));
+  const weeks = Math.floor(days / 7);
+
+  let label: string;
+  if (minutes < 1) {
+    label = "just now";
+    return label;
+  } else if (minutes < 60) {
+    label = `${minutes}m`;
+  } else if (hours < 24) {
+    label = `${hours}h`;
+  } else if (days < 7) {
+    label = `${days}d`;
+  } else if (weeks < 5) {
+    label = `${weeks}w`;
+  } else {
+    return formatDate(date);
+  }
+
+  return isFuture ? `in ${label}` : `${label} ago`;
+}
+
+export function groupEventsByDate(
+  events: Array<{ startTime: string; [key: string]: unknown }>
+): Map<string, typeof events> {
+  const groups = new Map<string, typeof events>();
+  for (const event of events) {
+    const key = new Date(event.startTime).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    });
+    const group = groups.get(key) ?? [];
+    group.push(event);
+    groups.set(key, group);
+  }
+  return groups;
 }

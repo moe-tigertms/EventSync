@@ -11,15 +11,27 @@ A full-stack event scheduling application with user accounts, invitations, statu
 ## Features
 
 - **Event Management:** Create, edit, and delete events with title, date/time, location, and description
+- **Duplicate Events:** Clone any event with one click to quickly create similar events
+- **Export to Calendar:** Download events as `.ics` files compatible with Google Calendar, Apple Calendar, Outlook, etc.
+- **Share Events:** Copy event details to clipboard for quick sharing
 - **Status Tracking:** RSVP to events as "Upcoming", "Attending", "Maybe", or "Declined"
+- **RSVP Summary:** See at-a-glance counts of attending, maybe, and declined guests
 - **User Accounts:** Sign up / sign in via Clerk (email, Google, GitHub, etc.)
 - **Invitations:** Invite users by email; shows their profile (avatar + name) if they already have an account
 - **Search:** Find events by title, date range, location, or description
+- **Dashboard Stats:** Overview cards showing total events, upcoming, completed, and organized counts
+- **Relative Time:** Events display human-friendly time like "in 2h" or "3d ago"
+- **Past Event Indicators:** Visual distinction between upcoming and past events
 - **AI Assistant:** Floating chat panel powered by Google Gemini that can:
   - Create events: _"Schedule a team meeting tomorrow at 3pm in Room A"_
   - Edit events: _"Move the standup to 10am"_
   - Delete events: _"Cancel the Friday lunch"_
   - Set RSVP status: _"Mark me as attending the birthday party"_
+- **Toast Notifications:** Non-intrusive success/error/info notifications for all actions
+- **Confirmation Dialogs:** Safe, styled confirmation modals for destructive actions
+- **Keyboard Shortcuts:**
+  - `Ctrl+K` / `Cmd+K` — Focus search bar
+  - `Escape` — Close any open modal or the AI chat panel
 - **Modern UI:** Glass-morphism cards, gradient headers, animated badges, responsive layout
 
 ## Prerequisites
@@ -97,43 +109,50 @@ backend/
 
 frontend/
   src/
-    main.tsx          Entry point (Clerk + Router providers)
+    main.tsx          Entry point (Clerk + Router + Toast providers)
     App.tsx           Route definitions
     index.css         Tailwind v4 + custom styles
     lib/
       api.ts          Typed API client with auth token injection
-      utils.ts        Utility functions (cn, date formatting, etc.)
+      utils.ts        Utility functions (cn, date formatting, relative time)
+      useKeyboard.ts  Keyboard shortcut hooks (useEscape, useKeydown)
     components/
       Layout.tsx      App shell with gradient header
-      EventCard.tsx   Event card with date badge, status, owner
-      EventForm.tsx   Create/edit event modal
+      EventCard.tsx   Event card with date badge, status, relative time
+      EventForm.tsx   Create/edit event modal with validation
       SearchBar.tsx   Search input with date/location filters
       StatusBadge.tsx Colored RSVP status pill
       InviteModal.tsx Invite users with autocomplete
       AiAssistant.tsx Floating AI chat panel
+      Avatar.tsx      Reusable avatar component with fallback initials
+      Toast.tsx       Toast notification system (provider + hook)
+      ConfirmDialog.tsx  Styled confirmation modal for destructive actions
+      StatsBar.tsx    Dashboard statistics summary cards
     pages/
-      Dashboard.tsx   Event grid with tabs + search
-      EventDetail.tsx Full event view with RSVP + guests
+      Dashboard.tsx   Event grid with tabs, search, and stats
+      EventDetail.tsx Full event view with RSVP, guests, export, duplicate
       SignIn.tsx      Clerk sign-in page
       SignUp.tsx      Clerk sign-up page
 ```
 
 ## API Endpoints
 
-| Method | Path                                | Description             |
-| ------ | ----------------------------------- | ----------------------- |
-| GET    | `/api/health`                       | Health check            |
-| GET    | `/api/events`                       | List user's events      |
-| POST   | `/api/events`                       | Create event            |
-| GET    | `/api/events/:id`                   | Get event detail        |
-| PATCH  | `/api/events/:id`                   | Update event            |
-| DELETE | `/api/events/:id`                   | Delete event            |
-| POST   | `/api/events/:id/invitations`       | Invite user by email    |
-| PATCH  | `/api/events/:id/status`            | Set RSVP status         |
-| DELETE | `/api/events/:eid/invitations/:iid` | Remove invitation       |
-| GET    | `/api/search`                       | Search events           |
-| GET    | `/api/users/search`                 | Search users for invite |
-| POST   | `/api/ai`                           | AI assistant endpoint   |
+| Method | Path                                | Description              |
+| ------ | ----------------------------------- | ------------------------ |
+| GET    | `/api/health`                       | Health check             |
+| GET    | `/api/events`                       | List user's events       |
+| POST   | `/api/events`                       | Create event             |
+| GET    | `/api/events/:id`                   | Get event detail         |
+| PATCH  | `/api/events/:id`                   | Update event             |
+| DELETE | `/api/events/:id`                   | Delete event             |
+| POST   | `/api/events/:id/duplicate`         | Duplicate event          |
+| GET    | `/api/events/:id/export`            | Export event as .ics     |
+| POST   | `/api/events/:id/invitations`       | Invite user by email     |
+| PATCH  | `/api/events/:id/status`            | Set RSVP status          |
+| DELETE | `/api/events/:eid/invitations/:iid` | Remove invitation        |
+| GET    | `/api/search`                       | Search events            |
+| GET    | `/api/users/search`                 | Search users for invite  |
+| POST   | `/api/ai`                           | AI assistant endpoint    |
 
 ## Deployment
 

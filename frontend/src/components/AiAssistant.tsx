@@ -3,6 +3,7 @@ import { Sparkles, Send, X, Bot, User } from "lucide-react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../lib/api";
 import type { EventData } from "../lib/api";
+import { useToast } from "./Toast";
 import { cn } from "../lib/utils";
 
 interface Message {
@@ -17,12 +18,13 @@ interface AiAssistantProps {
 
 export function AiAssistant({ events, onActionPerformed }: AiAssistantProps) {
   const { getToken } = useAuth();
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
       content:
-        'Hi! I\'m your AI scheduling assistant. I can create, edit, or delete events for you. Try saying something like:\n\n- "Create a team meeting tomorrow at 3pm"\n- "Move the standup to 10am"\n- "Cancel the Friday lunch"',
+        'Hi! I\'m your AI scheduling assistant. Try:\n\n- "Create a team meeting tomorrow at 3pm"\n- "Move the standup to 10am"\n- "Cancel the Friday lunch"\n- "Mark me as attending the party"',
     },
   ]);
   const [input, setInput] = useState("");
@@ -32,6 +34,15 @@ export function AiAssistant({ events, onActionPerformed }: AiAssistantProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open]);
 
   const handleSend = async () => {
     const msg = input.trim();
@@ -59,6 +70,14 @@ export function AiAssistant({ events, onActionPerformed }: AiAssistantProps) {
       ]);
 
       if (result.actions.length > 0) {
+        const action = result.actions[0];
+        if (action.type === "created") toast("Event created by AI", "success");
+        else if (action.type === "updated")
+          toast("Event updated by AI", "success");
+        else if (action.type === "deleted")
+          toast("Event deleted by AI", "info");
+        else if (action.type === "status_updated")
+          toast("RSVP updated by AI", "success");
         onActionPerformed();
       }
     } catch {
@@ -76,26 +95,25 @@ export function AiAssistant({ events, onActionPerformed }: AiAssistantProps) {
 
   return (
     <>
-      {/* Floating button */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-r from-primary-500 to-purple-500 text-white shadow-xl shadow-primary-500/30 hover:shadow-primary-500/50 hover:scale-105 transition-smooth flex items-center justify-center"
+          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-r from-primary-500 to-purple-500 text-white shadow-xl shadow-primary-500/30 hover:shadow-primary-500/50 hover:scale-105 transition-smooth flex items-center justify-center group"
         >
-          <Sparkles className="w-6 h-6" />
+          <Sparkles className="w-6 h-6 group-hover:animate-spin" />
         </button>
       )}
 
-      {/* Chat panel */}
       {open && (
         <div className="fixed bottom-6 right-6 z-50 w-[400px] max-w-[calc(100vw-2rem)] h-[520px] max-h-[calc(100vh-6rem)] glass rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-white/30">
-          {/* Header */}
           <div className="px-4 py-3 bg-gradient-to-r from-primary-500 to-purple-500 text-white flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5" />
               <div>
                 <h3 className="font-semibold text-sm">AI Assistant</h3>
-                <p className="text-[10px] text-white/70">Powered by Gemini</p>
+                <p className="text-[10px] text-white/70">
+                  Powered by Gemini &middot; Esc to close
+                </p>
               </div>
             </div>
             <button
@@ -106,7 +124,6 @@ export function AiAssistant({ events, onActionPerformed }: AiAssistantProps) {
             </button>
           </div>
 
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.map((msg, i) => (
               <div
@@ -155,7 +172,6 @@ export function AiAssistant({ events, onActionPerformed }: AiAssistantProps) {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
           <div className="p-3 border-t border-gray-100">
             <div className="flex gap-2">
               <input

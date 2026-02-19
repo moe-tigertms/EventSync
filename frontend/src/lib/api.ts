@@ -23,7 +23,9 @@ async function request<T>(
   return data as T;
 }
 
+// ---------------------------------------------------------------------------
 // Types
+// ---------------------------------------------------------------------------
 export interface UserProfile {
   id: string;
   email: string;
@@ -68,7 +70,9 @@ export interface AiResponse {
   }>;
 }
 
+// ---------------------------------------------------------------------------
 // API functions
+// ---------------------------------------------------------------------------
 export const api = {
   getEvents(token: string) {
     return request<EventData[]>("/api/events", {}, token);
@@ -115,6 +119,18 @@ export const api = {
 
   deleteEvent(id: string, token: string) {
     return request<null>(`/api/events/${id}`, { method: "DELETE" }, token);
+  },
+
+  duplicateEvent(id: string, token: string) {
+    return request<EventData>(
+      `/api/events/${id}/duplicate`,
+      { method: "POST" },
+      token
+    );
+  },
+
+  getExportUrl(id: string, token: string) {
+    return `${API_URL}/api/events/${id}/export?__clerk_db_jwt=${token}`;
   },
 
   inviteToEvent(eventId: string, email: string, token: string) {

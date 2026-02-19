@@ -8,11 +8,9 @@ export function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-white/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            {/* Logo */}
             <Link to="/" className="flex items-center gap-3 group">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shadow-lg shadow-primary-500/25 group-hover:shadow-primary-500/40 transition-smooth">
                 <Calendar className="w-5 h-5 text-white" />
@@ -25,7 +23,6 @@ export function Layout() {
               </div>
             </Link>
 
-            {/* Nav */}
             <nav className="flex items-center gap-2">
               <Link
                 to="/"
@@ -59,14 +56,18 @@ export function Layout() {
         </div>
       </header>
 
-      {/* Main content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Outlet />
       </main>
 
-      {/* Footer */}
       <footer className="py-6 text-center text-xs text-gray-400">
-        <p>EventSync &mdash; AI-powered event scheduling</p>
+        <p>
+          EventSync &mdash; AI-powered event scheduling &middot;{" "}
+          <kbd className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-mono text-[10px]">
+            Ctrl+K
+          </kbd>{" "}
+          to search
+        </p>
       </footer>
     </div>
   );

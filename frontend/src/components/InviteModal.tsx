@@ -4,7 +4,10 @@ import { useAuth } from "@clerk/clerk-react";
 import { api } from "../lib/api";
 import type { UserProfile, InvitationData } from "../lib/api";
 import { StatusBadge } from "./StatusBadge";
-import { getInitials, cn } from "../lib/utils";
+import { Avatar } from "./Avatar";
+import { useToast } from "./Toast";
+import { useEscape } from "../lib/useKeyboard";
+import { cn } from "../lib/utils";
 
 interface InviteModalProps {
   eventId: string;
@@ -20,11 +23,12 @@ export function InviteModal({
   onUpdate,
 }: InviteModalProps) {
   const { getToken } = useAuth();
+  const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [suggestions, setSuggestions] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+
+  useEscape(onClose, !loading);
 
   const searchUsers = useCallback(
     async (query: string) => {
@@ -53,18 +57,16 @@ export function InviteModal({
     const targetEmail = inviteEmail ?? email;
     if (!targetEmail.trim()) return;
     setLoading(true);
-    setError("");
-    setSuccess("");
     try {
       const token = await getToken();
       if (!token) return;
       await api.inviteToEvent(eventId, targetEmail.trim(), token);
-      setSuccess(`Invited ${targetEmail}`);
+      toast(`Invited ${targetEmail}`, "success");
       setEmail("");
       setSuggestions([]);
       onUpdate();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to invite");
+      toast(err instanceof Error ? err.message : "Failed to invite", "error");
     } finally {
       setLoading(false);
     }
@@ -75,9 +77,10 @@ export function InviteModal({
       const token = await getToken();
       if (!token) return;
       await api.removeInvitation(eventId, invId, token);
+      toast("Invitation removed", "info");
       onUpdate();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove");
+      toast(err instanceof Error ? err.message : "Failed to remove", "error");
     }
   };
 
@@ -87,7 +90,7 @@ export function InviteModal({
         className="absolute inset-0 bg-black/30 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-md glass rounded-2xl shadow-2xl p-6">
+      <div className="relative w-full max-w-md glass rounded-2xl shadow-2xl p-6 animate-in fade-in zoom-in-95">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-bold gradient-text flex items-center gap-2">
             <UserPlus className="w-5 h-5" />
@@ -101,7 +104,6 @@ export function InviteModal({
           </button>
         </div>
 
-        {/* Email input */}
         <div className="relative mb-4">
           <div className="flex gap-2">
             <input
@@ -111,6 +113,7 @@ export function InviteModal({
               onKeyDown={(e) => e.key === "Enter" && handleInvite()}
               placeholder="Enter email address..."
               className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none text-sm"
+              autoFocus
             />
             <button
               onClick={() => handleInvite()}
@@ -126,7 +129,6 @@ export function InviteModal({
             </button>
           </div>
 
-          {/* User suggestions dropdown */}
           {suggestions.length > 0 && (
             <div className="absolute top-full left-0 right-12 mt-1 glass rounded-xl shadow-xl border border-gray-100 py-1 z-10 max-h-48 overflow-y-auto">
               {suggestions.map((u) => (
@@ -139,17 +141,13 @@ export function InviteModal({
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2 hover:bg-primary-50 transition-colors text-left"
                 >
-                  {u.imageUrl ? (
-                    <img
-                      src={u.imageUrl}
-                      alt=""
-                      className="w-8 h-8 rounded-full"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-xs font-bold">
-                      {getInitials(u.firstName, u.lastName)}
-                    </div>
-                  )}
+                  <Avatar
+                    imageUrl={u.imageUrl}
+                    firstName={u.firstName}
+                    lastName={u.lastName}
+                    email={u.email}
+                    size="sm"
+                  />
                   <div>
                     <p className="text-sm font-medium text-gray-900">
                       {u.firstName} {u.lastName}
@@ -162,18 +160,6 @@ export function InviteModal({
           )}
         </div>
 
-        {error && (
-          <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg mb-3">
-            {error}
-          </p>
-        )}
-        {success && (
-          <p className="text-sm text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg mb-3">
-            {success}
-          </p>
-        )}
-
-        {/* Current invitations */}
         <div>
           <h3 className="text-sm font-medium text-gray-500 mb-2">
             Invited ({invitations.length})
@@ -190,25 +176,19 @@ export function InviteModal({
                   className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    {inv.user?.imageUrl ? (
-                      <img
-                        src={inv.user.imageUrl}
-                        alt=""
-                        className="w-8 h-8 rounded-full"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs font-bold">
-                        {inv.user
-                          ? getInitials(inv.user.firstName, inv.user.lastName)
-                          : inv.inviteeEmail.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <Avatar
+                      imageUrl={inv.user?.imageUrl}
+                      firstName={inv.user?.firstName}
+                      lastName={inv.user?.lastName}
+                      email={inv.inviteeEmail}
+                      size="sm"
+                      className="ring-0"
+                    />
                     <div>
                       <p className="text-sm font-medium text-gray-900">
                         {inv.user
-                          ? `${inv.user.firstName ?? ""} ${
-                              inv.user.lastName ?? ""
-                            }`.trim() || inv.inviteeEmail
+                          ? `${inv.user.firstName ?? ""} ${inv.user.lastName ?? ""}`.trim() ||
+                            inv.inviteeEmail
                           : inv.inviteeEmail}
                       </p>
                       {inv.user && (

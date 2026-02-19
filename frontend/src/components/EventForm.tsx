@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X, Calendar, MapPin, AlignLeft, Clock } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useEscape } from "../lib/useKeyboard";
 import type { EventData } from "../lib/api";
 
 interface EventFormProps {
@@ -28,10 +29,16 @@ export function EventForm({ event, onSubmit, onClose }: EventFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEscape(onClose, !loading);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !startTime) {
       setError("Title and start time are required");
+      return;
+    }
+    if (endTime && new Date(endTime) <= new Date(startTime)) {
+      setError("End time must be after start time");
       return;
     }
     setLoading(true);
@@ -54,13 +61,10 @@ export function EventForm({ event, onSubmit, onClose }: EventFormProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/30 backdrop-blur-sm"
         onClick={onClose}
       />
-
-      {/* Modal */}
       <div className="relative w-full max-w-lg glass rounded-2xl shadow-2xl p-6 animate-in fade-in zoom-in-95">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold gradient-text">
@@ -75,7 +79,6 @@ export function EventForm({ event, onSubmit, onClose }: EventFormProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Title */}
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
               <Calendar className="w-4 h-4 text-primary-500" />
@@ -91,7 +94,6 @@ export function EventForm({ event, onSubmit, onClose }: EventFormProps) {
             />
           </div>
 
-          {/* Date/Time row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
@@ -114,12 +116,12 @@ export function EventForm({ event, onSubmit, onClose }: EventFormProps) {
                 type="datetime-local"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
+                min={startTime}
                 className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-smooth text-sm"
               />
             </div>
           </div>
 
-          {/* Location */}
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
               <MapPin className="w-4 h-4 text-primary-500" />
@@ -134,7 +136,6 @@ export function EventForm({ event, onSubmit, onClose }: EventFormProps) {
             />
           </div>
 
-          {/* Description */}
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
               <AlignLeft className="w-4 h-4 text-primary-500" />
@@ -155,7 +156,6 @@ export function EventForm({ event, onSubmit, onClose }: EventFormProps) {
             </p>
           )}
 
-          {/* Buttons */}
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"

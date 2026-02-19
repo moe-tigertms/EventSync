@@ -13,13 +13,25 @@ import {
   AlignLeft,
   Loader2,
   Check,
+  Copy,
+  Download,
+  Share2,
 } from "lucide-react";
 import { api } from "../lib/api";
 import type { EventData } from "../lib/api";
 import { StatusBadge } from "../components/StatusBadge";
 import { EventForm } from "../components/EventForm";
 import { InviteModal } from "../components/InviteModal";
-import { cn, formatDate, formatTime, getInitials } from "../lib/utils";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { Avatar } from "../components/Avatar";
+import { useToast } from "../components/Toast";
+import {
+  cn,
+  formatDate,
+  formatTime,
+  relativeTime,
+  isUpcoming,
+} from "../lib/utils";
 
 const statusOptions = [
   {
@@ -35,12 +47,15 @@ export function EventDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getToken } = useAuth();
+  const { toast } = useToast();
   const [event, setEvent] = useState<EventData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
 
   const fetchEvent = useCallback(async () => {
     if (!id) return;
@@ -71,20 +86,24 @@ export function EventDetail() {
     const token = await getToken();
     if (!token) return;
     await api.updateEvent(id, data, token);
+    toast("Event updated", "success");
     fetchEvent();
   };
 
   const handleDelete = async () => {
-    if (!id || !confirm("Are you sure you want to delete this event?")) return;
+    if (!id) return;
     setDeleting(true);
     try {
       const token = await getToken();
       if (!token) return;
       await api.deleteEvent(id, token);
+      toast("Event deleted", "info");
       navigate("/");
     } catch (err) {
       console.error("Failed to delete:", err);
+      toast("Failed to delete event", "error");
       setDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -97,11 +116,61 @@ export function EventDetail() {
       const token = await getToken();
       if (!token) return;
       await api.setEventStatus(id, status, token);
+      toast(`RSVP set to ${status}`, "success");
       fetchEvent();
     } catch (err) {
       console.error("Failed to update status:", err);
+      toast("Failed to update RSVP", "error");
     } finally {
       setUpdatingStatus(false);
+    }
+  };
+
+  const handleDuplicate = async () => {
+    if (!id) return;
+    setDuplicating(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const newEvent = await api.duplicateEvent(id, token);
+      toast("Event duplicated!", "success");
+      navigate(`/events/${newEvent.id}`);
+    } catch (err) {
+      console.error("Failed to duplicate:", err);
+      toast("Failed to duplicate event", "error");
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const token = await getToken();
+      if (!token || !id) return;
+      const url = api.getExportUrl(id, token);
+      window.open(url, "_blank");
+      toast("Downloading calendar file...", "info");
+    } catch {
+      toast("Failed to export event", "error");
+    }
+  };
+
+  const handleShare = async () => {
+    if (!event) return;
+    const text = [
+      event.title,
+      `Date: ${formatDate(event.startTime)} at ${formatTime(event.startTime)}`,
+      event.location && `Location: ${event.location}`,
+      event.description && `\n${event.description}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("Event details copied to clipboard", "success");
+    } catch {
+      toast("Failed to copy", "error");
     }
   };
 
@@ -126,9 +195,19 @@ export function EventDetail() {
     );
   }
 
+  const upcoming = isUpcoming(event.startTime);
+  const attendingCount = event.invitations.filter(
+    (i) => i.status === "attending"
+  ).length;
+  const maybeCount = event.invitations.filter(
+    (i) => i.status === "maybe"
+  ).length;
+  const declinedCount = event.invitations.filter(
+    (i) => i.status === "declined"
+  ).length;
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      {/* Back button */}
       <Link
         to="/"
         className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-primary-600 transition-colors"
@@ -137,10 +216,16 @@ export function EventDetail() {
         Back to events
       </Link>
 
-      {/* Main card */}
       <div className="glass rounded-2xl overflow-hidden">
         {/* Gradient banner */}
-        <div className="h-32 bg-gradient-to-r from-primary-500 via-purple-500 to-accent-500 relative">
+        <div
+          className={cn(
+            "h-32 relative",
+            upcoming
+              ? "bg-gradient-to-r from-primary-500 via-purple-500 to-accent-500"
+              : "bg-gradient-to-r from-gray-400 via-gray-500 to-gray-600"
+          )}
+        >
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIyMCIgY3k9IjIwIiByPSIxIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiLz48L3N2Zz4=')] opacity-50" />
           <div className="absolute bottom-4 left-6 right-6 flex items-end justify-between">
             <div className="flex items-center gap-3">
@@ -154,24 +239,55 @@ export function EventDetail() {
                   {new Date(event.startTime).getDate()}
                 </span>
               </div>
+              {!upcoming && (
+                <span className="px-2.5 py-1 rounded-lg bg-white/20 backdrop-blur text-white text-xs font-semibold">
+                  Past Event
+                </span>
+              )}
             </div>
-            {event.isOwner && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowEdit(true)}
-                  className="p-2 rounded-lg bg-white/20 backdrop-blur hover:bg-white/30 text-white transition-colors"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="p-2 rounded-lg bg-white/20 backdrop-blur hover:bg-red-500/80 text-white transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleShare}
+                className="p-2 rounded-lg bg-white/20 backdrop-blur hover:bg-white/30 text-white transition-colors"
+                title="Copy event details"
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleExport}
+                className="p-2 rounded-lg bg-white/20 backdrop-blur hover:bg-white/30 text-white transition-colors"
+                title="Download .ics file"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleDuplicate}
+                disabled={duplicating}
+                className="p-2 rounded-lg bg-white/20 backdrop-blur hover:bg-white/30 text-white transition-colors"
+                title="Duplicate event"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+              {event.isOwner && (
+                <>
+                  <button
+                    onClick={() => setShowEdit(true)}
+                    className="p-2 rounded-lg bg-white/20 backdrop-blur hover:bg-white/30 text-white transition-colors"
+                    title="Edit event"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={deleting}
+                    className="p-2 rounded-lg bg-white/20 backdrop-blur hover:bg-red-500/80 text-white transition-colors"
+                    title="Delete event"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -183,7 +299,7 @@ export function EventDetail() {
               <h1 className="text-2xl font-bold text-gray-900">
                 {event.title}
               </h1>
-              <div className="flex items-center gap-3 mt-2">
+              <div className="flex items-center gap-3 mt-2 flex-wrap">
                 <StatusBadge status={event.myStatus} size="md" />
                 {event.isOwner && (
                   <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
@@ -191,6 +307,16 @@ export function EventDetail() {
                     Organizer
                   </span>
                 )}
+                <span
+                  className={cn(
+                    "text-xs px-2.5 py-1 rounded-full",
+                    upcoming
+                      ? "bg-blue-50 text-blue-600"
+                      : "bg-gray-100 text-gray-500"
+                  )}
+                >
+                  {relativeTime(event.startTime)}
+                </span>
               </div>
             </div>
           </div>
@@ -227,7 +353,7 @@ export function EventDetail() {
           {event.description && (
             <div className="flex items-start gap-3">
               <AlignLeft className="w-5 h-5 text-primary-500 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-gray-700 leading-relaxed">
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
                 {event.description}
               </p>
             </div>
@@ -235,17 +361,13 @@ export function EventDetail() {
 
           {/* Owner info */}
           <div className="flex items-center gap-3 p-3 rounded-xl bg-primary-50/50">
-            {event.owner.imageUrl ? (
-              <img
-                src={event.owner.imageUrl}
-                alt=""
-                className="w-10 h-10 rounded-full ring-2 ring-white"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold ring-2 ring-white">
-                {getInitials(event.owner.firstName, event.owner.lastName)}
-              </div>
-            )}
+            <Avatar
+              imageUrl={event.owner.imageUrl}
+              firstName={event.owner.firstName}
+              lastName={event.owner.lastName}
+              email={event.owner.email}
+              size="md"
+            />
             <div>
               <p className="text-sm font-medium text-gray-900">
                 {event.owner.firstName} {event.owner.lastName}
@@ -283,6 +405,24 @@ export function EventDetail() {
             </div>
           )}
 
+          {/* RSVP Summary */}
+          {event.invitations.length > 0 && (
+            <div className="flex items-center gap-4 text-xs">
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                {attendingCount} attending
+              </span>
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 text-amber-700">
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                {maybeCount} maybe
+              </span>
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 text-red-700">
+                <span className="w-2 h-2 rounded-full bg-red-500" />
+                {declinedCount} declined
+              </span>
+            </div>
+          )}
+
           {/* Invitations section */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -312,25 +452,19 @@ export function EventDetail() {
                     className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50/50"
                   >
                     <div className="flex items-center gap-3">
-                      {inv.user?.imageUrl ? (
-                        <img
-                          src={inv.user.imageUrl}
-                          alt=""
-                          className="w-8 h-8 rounded-full"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs font-bold">
-                          {inv.user
-                            ? getInitials(inv.user.firstName, inv.user.lastName)
-                            : inv.inviteeEmail.charAt(0).toUpperCase()}
-                        </div>
-                      )}
+                      <Avatar
+                        imageUrl={inv.user?.imageUrl}
+                        firstName={inv.user?.firstName}
+                        lastName={inv.user?.lastName}
+                        email={inv.inviteeEmail}
+                        size="sm"
+                        className="ring-0"
+                      />
                       <div>
                         <p className="text-sm font-medium text-gray-900">
                           {inv.user
-                            ? `${inv.user.firstName ?? ""} ${
-                                inv.user.lastName ?? ""
-                              }`.trim() || inv.inviteeEmail
+                            ? `${inv.user.firstName ?? ""} ${inv.user.lastName ?? ""}`.trim() ||
+                              inv.inviteeEmail
                             : inv.inviteeEmail}
                         </p>
                         {inv.user && (
@@ -367,6 +501,18 @@ export function EventDetail() {
           onUpdate={fetchEvent}
         />
       )}
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Delete Event"
+        message="Are you sure you want to delete this event? All invitations will also be removed. This action cannot be undone."
+        confirmLabel="Delete Event"
+        variant="danger"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 }
