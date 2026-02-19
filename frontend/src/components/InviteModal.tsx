@@ -7,7 +7,7 @@ import { StatusBadge } from "./StatusBadge";
 import { Avatar } from "./Avatar";
 import { useToast } from "./Toast";
 import { useEscape } from "../lib/useKeyboard";
-import { cn } from "../lib/utils";
+import { cn, displayName } from "../lib/utils";
 
 interface InviteModalProps {
   eventId: string;
@@ -186,10 +186,11 @@ export function InviteModal({
                     />
                     <div>
                       <p className="text-sm font-medium text-gray-900">
-                        {inv.user
-                          ? `${inv.user.firstName ?? ""} ${inv.user.lastName ?? ""}`.trim() ||
-                            inv.inviteeEmail
-                          : inv.inviteeEmail}
+                        {displayName(
+                          inv.user?.firstName,
+                          inv.user?.lastName,
+                          inv.inviteeEmail
+                        )}
                       </p>
                       {inv.user && (
                         <p className="text-xs text-gray-500">

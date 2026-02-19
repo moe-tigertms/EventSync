@@ -7,7 +7,6 @@ interface StatsBarProps {
 }
 
 export function StatsBar({ events }: StatsBarProps) {
-  const myEvents = events.filter((e) => e.isOwner);
   const upcomingCount = events.filter((e) => isUpcoming(e.startTime)).length;
   const pastCount = events.filter((e) => isPast(e.startTime)).length;
   const totalAttending = events.reduce(
@@ -42,8 +41,8 @@ export function StatsBar({ events }: StatsBarProps) {
       text: "text-emerald-700",
     },
     {
-      label: "Organized",
-      value: myEvents.length,
+      label: "Attending",
+      value: totalAttending,
       icon: Users,
       color: "from-purple-500 to-pink-500",
       bg: "bg-purple-50",

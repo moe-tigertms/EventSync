@@ -21,10 +21,12 @@ export function EventForm({ event, onSubmit, onClose }: EventFormProps) {
   const [description, setDescription] = useState(event?.description ?? "");
   const [location, setLocation] = useState(event?.location ?? "");
   const [startTime, setStartTime] = useState(
-    event?.startTime ? new Date(event.startTime).toISOString().slice(0, 16) : ""
+    event?.startTime
+      ? new Date(event.startTime).toISOString().slice(0, 16)
+      : "",
   );
   const [endTime, setEndTime] = useState(
-    event?.endTime ? new Date(event.endTime).toISOString().slice(0, 16) : ""
+    event?.endTime ? new Date(event.endTime).toISOString().slice(0, 16) : "",
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -60,7 +62,12 @@ export function EventForm({ event, onSubmit, onClose }: EventFormProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{
+        marginBottom: "0",
+      }}
+    >
       <div
         className="absolute inset-0 bg-black/30 backdrop-blur-sm"
         onClick={onClose}
@@ -156,7 +163,7 @@ export function EventForm({ event, onSubmit, onClose }: EventFormProps) {
             </p>
           )}
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -169,7 +176,7 @@ export function EventForm({ event, onSubmit, onClose }: EventFormProps) {
               disabled={loading}
               className={cn(
                 "px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-primary-500 to-purple-500 hover:from-primary-600 hover:to-purple-600 shadow-lg shadow-primary-500/25 transition-smooth",
-                loading && "opacity-50 cursor-not-allowed"
+                loading && "opacity-50 cursor-not-allowed",
               )}
             >
               {loading ? "Saving..." : event ? "Update Event" : "Create Event"}

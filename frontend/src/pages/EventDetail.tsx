@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
 import {
@@ -16,6 +16,7 @@ import {
   Copy,
   Download,
   Share2,
+  type LucideIcon,
 } from "lucide-react";
 import { api } from "../lib/api";
 import type { EventData } from "../lib/api";
@@ -25,13 +26,67 @@ import { InviteModal } from "../components/InviteModal";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Avatar } from "../components/Avatar";
 import { useToast } from "../components/Toast";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
 import {
   cn,
   formatDate,
   formatTime,
   relativeTime,
   isUpcoming,
+  displayName,
 } from "../lib/utils";
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+function BannerButton({
+  icon: Icon,
+  onClick,
+  disabled,
+  title,
+  danger,
+}: {
+  icon: LucideIcon;
+  onClick: () => void;
+  disabled?: boolean;
+  title: string;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={cn(
+        "p-2 rounded-lg bg-white/20 backdrop-blur text-white transition-colors",
+        danger ? "hover:bg-red-500/80" : "hover:bg-white/30",
+        disabled && "opacity-50"
+      )}
+    >
+      <Icon className="w-4 h-4" />
+    </button>
+  );
+}
+
+function DetailCard({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: LucideIcon;
+  label?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-xl bg-gray-50/80">
+      <Icon className="w-5 h-5 text-primary-500 mt-0.5" />
+      <div>
+        {children}
+        {label && <p className="text-xs text-gray-500">{label}</p>}
+      </div>
+    </div>
+  );
+}
 
 const statusOptions = [
   {
@@ -43,6 +98,9 @@ const statusOptions = [
   { value: "declined", label: "Declined", color: "from-red-500 to-pink-500" },
 ] as const;
 
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 export function EventDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -56,6 +114,8 @@ export function EventDetail() {
   const [deleting, setDeleting] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+
+  useDocumentTitle(event?.title ?? "Event");
 
   const fetchEvent = useCallback(async () => {
     if (!id) return;
@@ -144,12 +204,12 @@ export function EventDetail() {
   };
 
   const handleExport = async () => {
+    if (!id) return;
     try {
       const token = await getToken();
-      if (!token || !id) return;
-      const url = api.getExportUrl(id, token);
-      window.open(url, "_blank");
-      toast("Downloading calendar file...", "info");
+      if (!token) return;
+      await api.exportEvent(id, token);
+      toast("Calendar file downloaded", "success");
     } catch {
       toast("Failed to export event", "error");
     }
@@ -246,45 +306,13 @@ export function EventDetail() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleShare}
-                className="p-2 rounded-lg bg-white/20 backdrop-blur hover:bg-white/30 text-white transition-colors"
-                title="Copy event details"
-              >
-                <Share2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleExport}
-                className="p-2 rounded-lg bg-white/20 backdrop-blur hover:bg-white/30 text-white transition-colors"
-                title="Download .ics file"
-              >
-                <Download className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleDuplicate}
-                disabled={duplicating}
-                className="p-2 rounded-lg bg-white/20 backdrop-blur hover:bg-white/30 text-white transition-colors"
-                title="Duplicate event"
-              >
-                <Copy className="w-4 h-4" />
-              </button>
+              <BannerButton icon={Share2} onClick={handleShare} title="Copy event details" />
+              <BannerButton icon={Download} onClick={handleExport} title="Download .ics file" />
+              <BannerButton icon={Copy} onClick={handleDuplicate} disabled={duplicating} title="Duplicate event" />
               {event.isOwner && (
                 <>
-                  <button
-                    onClick={() => setShowEdit(true)}
-                    className="p-2 rounded-lg bg-white/20 backdrop-blur hover:bg-white/30 text-white transition-colors"
-                    title="Edit event"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    disabled={deleting}
-                    className="p-2 rounded-lg bg-white/20 backdrop-blur hover:bg-red-500/80 text-white transition-colors"
-                    title="Delete event"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <BannerButton icon={Edit3} onClick={() => setShowEdit(true)} title="Edit event" />
+                  <BannerButton icon={Trash2} onClick={() => setShowDeleteConfirm(true)} disabled={deleting} title="Delete event" danger />
                 </>
               )}
             </div>
@@ -293,63 +321,49 @@ export function EventDetail() {
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {/* Title + status */}
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {event.title}
-              </h1>
-              <div className="flex items-center gap-3 mt-2 flex-wrap">
-                <StatusBadge status={event.myStatus} size="md" />
-                {event.isOwner && (
-                  <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
-                    <Crown className="w-3 h-3" />
-                    Organizer
-                  </span>
-                )}
-                <span
-                  className={cn(
-                    "text-xs px-2.5 py-1 rounded-full",
-                    upcoming
-                      ? "bg-blue-50 text-blue-600"
-                      : "bg-gray-100 text-gray-500"
-                  )}
-                >
-                  {relativeTime(event.startTime)}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{event.title}</h1>
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
+              <StatusBadge status={event.myStatus} size="md" />
+              {event.isOwner && (
+                <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
+                  <Crown className="w-3 h-3" />
+                  Organizer
                 </span>
-              </div>
+              )}
+              <span
+                className={cn(
+                  "text-xs px-2.5 py-1 rounded-full",
+                  upcoming
+                    ? "bg-blue-50 text-blue-600"
+                    : "bg-gray-100 text-gray-500"
+                )}
+              >
+                {relativeTime(event.startTime)}
+              </span>
             </div>
           </div>
 
-          {/* Details grid */}
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex items-start gap-3 p-3 rounded-xl bg-gray-50/80">
-              <CalendarDays className="w-5 h-5 text-primary-500 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">
-                  {formatDate(event.startTime)}
-                </p>
-                <p className="text-xs text-gray-500">
-                  <Clock className="w-3 h-3 inline mr-1" />
-                  {formatTime(event.startTime)}
-                  {event.endTime && ` - ${formatTime(event.endTime)}`}
-                </p>
-              </div>
-            </div>
+            <DetailCard icon={CalendarDays}>
+              <p className="text-sm font-medium text-gray-900">
+                {formatDate(event.startTime)}
+              </p>
+              <p className="text-xs text-gray-500">
+                <Clock className="w-3 h-3 inline mr-1" />
+                {formatTime(event.startTime)}
+                {event.endTime && ` - ${formatTime(event.endTime)}`}
+              </p>
+            </DetailCard>
             {event.location && (
-              <div className="flex items-start gap-3 p-3 rounded-xl bg-gray-50/80">
-                <MapPin className="w-5 h-5 text-primary-500 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {event.location}
-                  </p>
-                  <p className="text-xs text-gray-500">Location</p>
-                </div>
-              </div>
+              <DetailCard icon={MapPin} label="Location">
+                <p className="text-sm font-medium text-gray-900">
+                  {event.location}
+                </p>
+              </DetailCard>
             )}
           </div>
 
-          {/* Description */}
           {event.description && (
             <div className="flex items-start gap-3">
               <AlignLeft className="w-5 h-5 text-primary-500 mt-0.5 flex-shrink-0" />
@@ -359,7 +373,6 @@ export function EventDetail() {
             </div>
           )}
 
-          {/* Owner info */}
           <div className="flex items-center gap-3 p-3 rounded-xl bg-primary-50/50">
             <Avatar
               imageUrl={event.owner.imageUrl}
@@ -370,13 +383,16 @@ export function EventDetail() {
             />
             <div>
               <p className="text-sm font-medium text-gray-900">
-                {event.owner.firstName} {event.owner.lastName}
+                {displayName(
+                  event.owner.firstName,
+                  event.owner.lastName,
+                  event.owner.email
+                )}
               </p>
               <p className="text-xs text-gray-500">Organizer</p>
             </div>
           </div>
 
-          {/* RSVP buttons (for non-owners) */}
           {!event.isOwner && (
             <div className="space-y-2">
               <h3 className="text-sm font-semibold text-gray-700">
@@ -405,9 +421,8 @@ export function EventDetail() {
             </div>
           )}
 
-          {/* RSVP Summary */}
           {event.invitations.length > 0 && (
-            <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-4 text-xs flex-wrap">
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
                 {attendingCount} attending
@@ -423,7 +438,6 @@ export function EventDetail() {
             </div>
           )}
 
-          {/* Invitations section */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-700">
@@ -462,10 +476,11 @@ export function EventDetail() {
                       />
                       <div>
                         <p className="text-sm font-medium text-gray-900">
-                          {inv.user
-                            ? `${inv.user.firstName ?? ""} ${inv.user.lastName ?? ""}`.trim() ||
-                              inv.inviteeEmail
-                            : inv.inviteeEmail}
+                          {displayName(
+                            inv.user?.firstName,
+                            inv.user?.lastName,
+                            inv.inviteeEmail
+                          )}
                         </p>
                         {inv.user && (
                           <p className="text-xs text-gray-500">
@@ -483,7 +498,6 @@ export function EventDetail() {
         </div>
       </div>
 
-      {/* Edit modal */}
       {showEdit && (
         <EventForm
           event={event}
@@ -492,7 +506,6 @@ export function EventDetail() {
         />
       )}
 
-      {/* Invite modal */}
       {showInvite && (
         <InviteModal
           eventId={event.id}
@@ -502,7 +515,6 @@ export function EventDetail() {
         />
       )}
 
-      {/* Delete confirmation */}
       <ConfirmDialog
         open={showDeleteConfirm}
         title="Delete Event"

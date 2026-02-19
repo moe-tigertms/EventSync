@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import { Plus, Calendar, Inbox, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Calendar,
+  Inbox,
+  ArrowUpDown,
+  Sun,
+} from "lucide-react";
 import { api } from "../lib/api";
 import type { EventData } from "../lib/api";
 import { EventCard } from "../components/EventCard";
@@ -8,10 +14,45 @@ import { EventForm } from "../components/EventForm";
 import { SearchBar } from "../components/SearchBar";
 import { AiAssistant } from "../components/AiAssistant";
 import { StatsBar } from "../components/StatsBar";
+import { EventGridSkeleton } from "../components/EventCardSkeleton";
 import { useToast } from "../components/Toast";
-import { cn } from "../lib/utils";
+import { useDocumentTitle } from "../lib/useDocumentTitle";
+import { cn, isToday, isUpcoming } from "../lib/utils";
 
 type Tab = "mine" | "invited";
+type SortKey = "date-asc" | "date-desc" | "title" | "created";
+
+const sortLabels: Record<SortKey, string> = {
+  "date-asc": "Date (earliest)",
+  "date-desc": "Date (latest)",
+  title: "Title A-Z",
+  created: "Recently created",
+};
+
+function sortEvents(events: EventData[], sort: SortKey): EventData[] {
+  const sorted = [...events];
+  switch (sort) {
+    case "date-asc":
+      return sorted.sort(
+        (a, b) =>
+          new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+      );
+    case "date-desc":
+      return sorted.sort(
+        (a, b) =>
+          new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+      );
+    case "title":
+      return sorted.sort((a, b) =>
+        a.title.localeCompare(b.title, undefined, { sensitivity: "base" })
+      );
+    case "created":
+      return sorted.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+  }
+}
 
 export function Dashboard() {
   const { getToken } = useAuth();
@@ -21,7 +62,11 @@ export function Dashboard() {
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("mine");
   const [isSearching, setIsSearching] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("date-asc");
+  const [showSort, setShowSort] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  useDocumentTitle("Dashboard");
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -95,7 +140,12 @@ export function Dashboard() {
 
   const myEvents = events.filter((e) => e.isOwner);
   const invitedEvents = events.filter((e) => !e.isOwner);
-  const displayEvents = activeTab === "mine" ? myEvents : invitedEvents;
+  const tabEvents = activeTab === "mine" ? myEvents : invitedEvents;
+  const displayEvents = sortEvents(tabEvents, sortKey);
+
+  const todayEvents = events.filter(
+    (e) => isToday(e.startTime) && isUpcoming(e.startTime)
+  );
 
   return (
     <div className="space-y-6">
@@ -113,7 +163,7 @@ export function Dashboard() {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-primary-500 to-purple-500 hover:from-primary-600 hover:to-purple-600 shadow-lg shadow-primary-500/25 transition-smooth"
+          className="btn-primary"
         >
           <Plus className="w-4 h-4" />
           New Event
@@ -123,50 +173,109 @@ export function Dashboard() {
       {/* Stats */}
       {!isSearching && !loading && <StatsBar events={events} />}
 
+      {/* Today's events highlight */}
+      {!isSearching && !loading && todayEvents.length > 0 && (
+        <div className="glass rounded-xl p-4 border-l-4 border-primary-500">
+          <div className="flex items-center gap-2 mb-3">
+            <Sun className="w-5 h-5 text-amber-500" />
+            <h2 className="text-sm font-semibold text-gray-800">
+              Happening Today
+            </h2>
+            <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
+              {todayEvents.length}
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {todayEvents.map((event) => (
+              <EventCard key={event.id} event={event} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Search */}
       <SearchBar onSearch={handleSearch} searchInputRef={searchRef} />
 
-      {/* Tabs */}
+      {/* Tabs + Sort */}
       {!isSearching && (
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-gray-100/80 w-fit">
-          <button
-            onClick={() => setActiveTab("mine")}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-smooth",
-              activeTab === "mine"
-                ? "bg-white text-primary-600 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-gray-100/80 w-fit">
+            <button
+              onClick={() => setActiveTab("mine")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-smooth",
+                activeTab === "mine"
+                  ? "bg-white text-primary-600 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              <Calendar className="w-4 h-4" />
+              My Events
+              <span className="ml-1 px-2 py-0.5 rounded-full bg-primary-100 text-primary-600 text-xs font-semibold">
+                {myEvents.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab("invited")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-smooth",
+                activeTab === "invited"
+                  ? "bg-white text-primary-600 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              <Inbox className="w-4 h-4" />
+              Invited
+              <span className="ml-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-600 text-xs font-semibold">
+                {invitedEvents.length}
+              </span>
+            </button>
+          </div>
+
+          {/* Sort dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSort(!showSort)}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-smooth border",
+                showSort
+                  ? "border-primary-300 bg-primary-50 text-primary-600"
+                  : "border-gray-200 text-gray-500 hover:bg-gray-50"
+              )}
+            >
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              {sortLabels[sortKey]}
+            </button>
+            {showSort && (
+              <div className="absolute right-0 top-full mt-1 glass rounded-xl shadow-xl border border-gray-100 py-1 z-20 min-w-[180px]">
+                {(Object.entries(sortLabels) as [SortKey, string][]).map(
+                  ([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        setSortKey(key);
+                        setShowSort(false);
+                      }}
+                      className={cn(
+                        "w-full text-left px-4 py-2 text-sm transition-colors",
+                        sortKey === key
+                          ? "bg-primary-50 text-primary-600 font-medium"
+                          : "text-gray-600 hover:bg-gray-50"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  )
+                )}
+              </div>
             )}
-          >
-            <Calendar className="w-4 h-4" />
-            My Events
-            <span className="ml-1 px-2 py-0.5 rounded-full bg-primary-100 text-primary-600 text-xs font-semibold">
-              {myEvents.length}
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveTab("invited")}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-smooth",
-              activeTab === "invited"
-                ? "bg-white text-primary-600 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            )}
-          >
-            <Inbox className="w-4 h-4" />
-            Invited
-            <span className="ml-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-600 text-xs font-semibold">
-              {invitedEvents.length}
-            </span>
-          </button>
+          </div>
         </div>
       )}
 
       {/* Event grid */}
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
-        </div>
+        <EventGridSkeleton />
       ) : displayEvents.length === 0 ? (
         <div className="text-center py-20">
           <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary-100 to-purple-100 flex items-center justify-center">
@@ -181,7 +290,7 @@ export function Dashboard() {
           </h3>
           <p className="text-gray-500 text-sm mb-4">
             {isSearching
-              ? "Try different search terms"
+              ? "Try different search terms or adjust your filters"
               : activeTab === "mine"
               ? "Create your first event to get started!"
               : "You'll see events here when someone invites you"}
@@ -189,7 +298,7 @@ export function Dashboard() {
           {!isSearching && activeTab === "mine" && (
             <button
               onClick={() => setShowForm(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-primary-500 to-purple-500 hover:from-primary-600 hover:to-purple-600 shadow-lg shadow-primary-500/25 transition-smooth"
+              className="btn-primary"
             >
               <Plus className="w-4 h-4" />
               Create Event

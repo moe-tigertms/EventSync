@@ -129,8 +129,27 @@ export const api = {
     );
   },
 
-  getExportUrl(id: string, token: string) {
-    return `${API_URL}/api/events/${id}/export?__clerk_db_jwt=${token}`;
+  async exportEvent(id: string, token: string) {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    };
+    const res = await fetch(`${API_URL}/api/events/${id}/export`, {
+      headers,
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Export failed");
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    const match = disposition.match(/filename="(.+)"/);
+    const filename = match?.[1] ?? "event.ics";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   },
 
   inviteToEvent(eventId: string, email: string, token: string) {

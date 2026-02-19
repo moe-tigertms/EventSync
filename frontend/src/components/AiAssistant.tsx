@@ -71,7 +71,16 @@ export function AiAssistant({ events, onActionPerformed }: AiAssistantProps) {
 
       if (result.actions.length > 0) {
         const action = result.actions[0];
-        if (action.type === "created") toast("Event created by AI", "success");
+        if (action.type === "created") {
+          const invited = (action as Record<string, unknown>).invited as string[] | undefined;
+          toast(
+            invited?.length
+              ? `Event created & ${invited.length} invite(s) sent`
+              : "Event created by AI",
+            "success",
+          );
+        } else if (action.type === "invited")
+          toast(`Invitation sent to ${(action as unknown as Record<string, string>).email}`, "success");
         else if (action.type === "updated")
           toast("Event updated by AI", "success");
         else if (action.type === "deleted")

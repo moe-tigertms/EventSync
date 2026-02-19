@@ -20,8 +20,13 @@ A full-stack event scheduling application with user accounts, invitations, statu
 - **Invitations:** Invite users by email; shows their profile (avatar + name) if they already have an account
 - **Search:** Find events by title, date range, location, or description
 - **Dashboard Stats:** Overview cards showing total events, upcoming, completed, and organized counts
+- **Happening Today:** Highlighted section at the top of the dashboard for events happening today
+- **Sort Events:** Sort by date (ascending/descending), title A-Z, or recently created
 - **Relative Time:** Events display human-friendly time like "in 2h" or "3d ago"
+- **Attendee Avatars:** Stacked avatar previews of attending guests on event cards
 - **Past Event Indicators:** Visual distinction between upcoming and past events
+- **Skeleton Loading:** Smooth shimmer loading animations instead of spinners
+- **Dynamic Page Titles:** Browser tab title updates based on current page/event
 - **AI Assistant:** Floating chat panel powered by Google Gemini that can:
   - Create events: _"Schedule a team meeting tomorrow at 3pm in Room A"_
   - Edit events: _"Move the standup to 10am"_
@@ -113,26 +118,29 @@ frontend/
     App.tsx           Route definitions
     index.css         Tailwind v4 + custom styles
     lib/
-      api.ts          Typed API client with auth token injection
-      utils.ts        Utility functions (cn, date formatting, relative time)
-      useKeyboard.ts  Keyboard shortcut hooks (useEscape, useKeydown)
+      api.ts              Typed API client with auth token injection
+      utils.ts            Utility functions (cn, dates, displayName, etc.)
+      useKeyboard.ts      Keyboard shortcut hooks (useEscape, useKeydown)
+      useDocumentTitle.ts Dynamic browser tab title hook
     components/
-      Layout.tsx      App shell with gradient header
-      EventCard.tsx   Event card with date badge, status, relative time
-      EventForm.tsx   Create/edit event modal with validation
-      SearchBar.tsx   Search input with date/location filters
-      StatusBadge.tsx Colored RSVP status pill
-      InviteModal.tsx Invite users with autocomplete
-      AiAssistant.tsx Floating AI chat panel
-      Avatar.tsx      Reusable avatar component with fallback initials
-      Toast.tsx       Toast notification system (provider + hook)
-      ConfirmDialog.tsx  Styled confirmation modal for destructive actions
-      StatsBar.tsx    Dashboard statistics summary cards
+      Layout.tsx          App shell with gradient header + footer
+      AuthLayout.tsx      Shared auth page layout (sign-in/sign-up)
+      EventCard.tsx       Event card with avatars, relative time, past badge
+      EventCardSkeleton.tsx  Shimmer skeleton loading for event grids
+      EventForm.tsx       Create/edit event modal with validation
+      SearchBar.tsx       Search input with date/location filters
+      StatusBadge.tsx     Colored RSVP status pill
+      InviteModal.tsx     Invite users with autocomplete
+      AiAssistant.tsx     Floating AI chat panel
+      Avatar.tsx          Reusable avatar with fallback initials
+      Toast.tsx           Toast notification system (provider + hook)
+      ConfirmDialog.tsx   Styled confirmation modal for destructive actions
+      StatsBar.tsx        Dashboard statistics summary cards
     pages/
-      Dashboard.tsx   Event grid with tabs, search, and stats
-      EventDetail.tsx Full event view with RSVP, guests, export, duplicate
-      SignIn.tsx      Clerk sign-in page
-      SignUp.tsx      Clerk sign-up page
+      Dashboard.tsx       Events grid with tabs, search, sort, today section
+      EventDetail.tsx     Full event view with RSVP, guests, export, duplicate
+      SignIn.tsx           Clerk sign-in page
+      SignUp.tsx           Clerk sign-up page
 ```
 
 ## API Endpoints

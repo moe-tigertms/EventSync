@@ -9,6 +9,40 @@ interface EventCardProps {
   event: EventData;
 }
 
+function AttendeeStack({
+  invitations,
+  max = 3,
+}: {
+  invitations: EventData["invitations"];
+  max?: number;
+}) {
+  const attending = invitations.filter((i) => i.status === "attending");
+  if (attending.length === 0) return null;
+  const shown = attending.slice(0, max);
+  const overflow = attending.length - max;
+
+  return (
+    <div className="flex items-center -space-x-1.5">
+      {shown.map((inv) => (
+        <Avatar
+          key={inv.id}
+          imageUrl={inv.user?.imageUrl}
+          firstName={inv.user?.firstName}
+          lastName={inv.user?.lastName}
+          email={inv.inviteeEmail}
+          size="xs"
+          className="ring-1 ring-white"
+        />
+      ))}
+      {overflow > 0 && (
+        <div className="w-6 h-6 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-[9px] font-bold ring-1 ring-white">
+          +{overflow}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function EventCard({ event }: EventCardProps) {
   const upcoming = isUpcoming(event.startTime);
   const attendeeCount = event.invitations.filter(
@@ -59,7 +93,11 @@ export function EventCard({ event }: EventCardProps) {
                 {event.endTime && ` - ${formatTime(event.endTime)}`}
               </span>
               <span className="text-gray-300">|</span>
-              <span className={cn(upcoming ? "text-primary-500" : "text-gray-400")}>
+              <span
+                className={cn(
+                  upcoming ? "text-primary-500" : "text-gray-400"
+                )}
+              >
                 {relativeTime(event.startTime)}
               </span>
             </div>
@@ -97,18 +135,7 @@ export function EventCard({ event }: EventCardProps) {
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <Avatar
-            imageUrl={event.owner.imageUrl}
-            firstName={event.owner.firstName}
-            lastName={event.owner.lastName}
-            email={event.owner.email}
-            size="xs"
-          />
-          <span className="text-gray-400 truncate max-w-[80px]">
-            {event.isOwner ? "You" : event.owner.firstName ?? event.owner.email}
-          </span>
-        </div>
+        <AttendeeStack invitations={event.invitations} />
       </div>
     </Link>
   );

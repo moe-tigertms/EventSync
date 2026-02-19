@@ -656,17 +656,20 @@ function buildAiSystemPrompt(): string {
   return `You are an AI assistant for the EventSync event scheduler app. You help users manage their events.
 
 CAPABILITIES:
-1. create_event — Create a new event. Required: title, startTime (ISO 8601). Optional: description, location, endTime.
+1. create_event — Create a new event. Required: title, startTime (ISO 8601). Optional: description, location, endTime, inviteEmails (array of email strings to invite after creation).
 2. update_event — Update an existing event. Required: eventId. Optional: title, description, location, startTime, endTime.
 3. delete_event — Delete an event. Required: eventId.
 4. set_status — Set RSVP status. Required: eventId, status (upcoming | attending | maybe | declined).
-5. reply — Just respond with text (no action).
+5. invite — Invite someone to an existing event. Required: eventId, email.
+6. reply — Just respond with text (no action).
 
 RULES:
 - Always respond with a single JSON object.
 - For actions: include "action" plus the required/optional fields.
 - For plain replies: use { "action": "reply", "message": "your text" }.
 - Infer dates relative to today. Today is ${today}.
+- If the user asks to create an event AND invite someone, use create_event with the inviteEmails field.
+- If the user asks to invite someone to an existing event, use the invite action.
 - If the user is ambiguous, pick the most likely interpretation and confirm in your reply message.
 - Always include a friendly "message" field describing what you did.`;
 }
@@ -679,6 +682,7 @@ type AiAction =
       description?: string;
       location?: string;
       endTime?: string;
+      inviteEmails?: string[];
       message?: string;
     }
   | {
@@ -698,6 +702,7 @@ type AiAction =
       status: string;
       message?: string;
     }
+  | { action: "invite"; eventId: string; email: string; message?: string }
   | { action: "reply"; message: string };
 
 app.post("/api/ai", ...auth, async (req: Request, res: Response) => {
@@ -763,6 +768,26 @@ app.post("/api/ai", ...auth, async (req: Request, res: Response) => {
 
     const actions: Array<Record<string, unknown>> = [];
 
+    async function inviteByEmail(eventId: string, email: string) {
+      const normalEmail = email.trim().toLowerCase();
+      if (normalEmail === user.email) return;
+      const existing = await prisma.invitation.findFirst({
+        where: { eventId, inviteeEmail: normalEmail },
+      });
+      if (existing) return;
+      const invitee = await prisma.user.findUnique({
+        where: { email: normalEmail },
+      });
+      await prisma.invitation.create({
+        data: {
+          eventId,
+          inviteeEmail: normalEmail,
+          userId: invitee?.id ?? null,
+          status: InvitationStatus.upcoming,
+        },
+      });
+    }
+
     if (
       parsed.action === "create_event" &&
       parsed.title &&
@@ -779,7 +804,50 @@ app.post("/api/ai", ...auth, async (req: Request, res: Response) => {
         },
         include: { owner: true, invitations: { include: { user: true } } },
       });
-      actions.push({ type: "created", event });
+
+      const emails = parsed.inviteEmails ?? [];
+      const invited: string[] = [];
+      for (const email of emails) {
+        try {
+          await inviteByEmail(event.id, email);
+          invited.push(email.trim().toLowerCase());
+        } catch {
+          /* skip duplicates / errors */
+        }
+      }
+
+      const freshEvent =
+        invited.length > 0
+          ? await prisma.event.findUnique({
+              where: { id: event.id },
+              include: {
+                owner: true,
+                invitations: { include: { user: true } },
+              },
+            })
+          : event;
+
+      actions.push({
+        type: "created",
+        event: freshEvent ?? event,
+        ...(invited.length > 0 && { invited }),
+      });
+    } else if (parsed.action === "invite" && parsed.eventId && parsed.email) {
+      const ev = await prisma.event.findFirst({
+        where: { id: parsed.eventId, ownerId: user.id },
+      });
+      if (ev) {
+        try {
+          await inviteByEmail(ev.id, parsed.email);
+          actions.push({
+            type: "invited",
+            eventId: ev.id,
+            email: parsed.email.trim().toLowerCase(),
+          });
+        } catch {
+          actions.push({ type: "invite_failed", email: parsed.email });
+        }
+      }
     } else if (parsed.action === "update_event" && parsed.eventId) {
       const ev = await prisma.event.findFirst({
         where: { id: parsed.eventId, ownerId: user.id },

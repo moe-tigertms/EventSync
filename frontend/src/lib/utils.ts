@@ -73,19 +73,25 @@ export function relativeTime(date: string | Date): string {
   return isFuture ? `in ${label}` : `${label} ago`;
 }
 
-export function groupEventsByDate(
-  events: Array<{ startTime: string; [key: string]: unknown }>
-): Map<string, typeof events> {
-  const groups = new Map<string, typeof events>();
-  for (const event of events) {
-    const key = new Date(event.startTime).toLocaleDateString("en-US", {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-    });
-    const group = groups.get(key) ?? [];
-    group.push(event);
-    groups.set(key, group);
-  }
-  return groups;
+export function displayName(
+  firstName?: string | null,
+  lastName?: string | null,
+  email?: string
+): string {
+  const full = `${firstName ?? ""} ${lastName ?? ""}`.trim();
+  return full || email || "Unknown";
+}
+
+export function isToday(date: string | Date): boolean {
+  const d = new Date(date);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
+export function pluralize(count: number, singular: string, plural?: string): string {
+  return count === 1 ? singular : (plural ?? `${singular}s`);
 }
